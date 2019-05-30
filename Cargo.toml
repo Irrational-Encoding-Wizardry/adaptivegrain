@@ -1,0 +1,12 @@
+[package]
+name = "adaptivegrain-rs"
+version = "0.1.0"
+authors = ["kageru"]
+edition = "2018"
+
+[dependencies]
+failure = "0.1"
+vapoursynth = { path = "vapoursynth" }
+
+[lib]
+crate-type = ["cdylib"]
