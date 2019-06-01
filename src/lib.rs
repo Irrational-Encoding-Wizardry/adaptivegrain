@@ -1,19 +1,26 @@
 #[macro_use]
 extern crate failure;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate vapoursynth;
 
-use vapoursynth::core::CoreRef;
-use vapoursynth::map::Map;
-use vapoursynth::video_info::VideoInfo;
+mod grain;
+mod mask;
+
+use self::mask::Mask;
+use self::grain::Grain;
 use failure::Error;
+use vapoursynth::api::API;
+use vapoursynth::core::CoreRef;
+use vapoursynth::frame::{FrameRef, FrameRefMut};
+use vapoursynth::map::Map;
 use vapoursynth::node::Node;
 use vapoursynth::plugins::{Filter, FilterArgument, FrameContext, Metadata};
-use vapoursynth::api::API;
-use vapoursynth::frame::{FrameRef, FrameRefMut};
+use vapoursynth::video_info::VideoInfo;
 
-const PLUGIN_NAME: &str = "adaptivegrain";
-const PLUGIN_IDENTIFIER: &str = "moe.kageru.adaptivegrain";
+pub const PLUGIN_NAME: &str = "adaptivegrain";
+pub const PLUGIN_IDENTIFIER: &str = "moe.kageru.adaptivegrain";
 
 struct AdaptiveGrain<'core> {
     source: Node<'core>
@@ -74,6 +81,38 @@ make_filter_function! {
     }
 }
 
+make_filter_function! {
+    GrainFunction, "Grain"
+
+    fn create_grain<'core>(
+        _api: API,
+        _core: CoreRef<'core>,
+        clip: Node<'core>,
+    ) -> Result<Option<Box<Filter<'core> + 'core>>, Error> {
+        Ok(Some(Box::new(Grain { source: clip })))
+    }
+}
+
+make_filter_function! {
+    MaskFunction, "Mask"
+
+    fn create_mask<'core>(
+        _api: API,
+        _core: CoreRef<'core>,
+        clip: Node<'core>,
+        luma_scaling: Option<f64>
+    ) -> Result<Option<Box<Filter<'core> + 'core>>, Error> {
+        let luma_scaling = match luma_scaling {
+            Some(i) => i as f32,
+            None => 10.0
+        };
+        Ok(Some(Box::new(Mask {
+            source: clip,
+            luma_scaling
+        })))
+    }
+}
+
 export_vapoursynth_plugin! {
     Metadata {
         identifier: PLUGIN_IDENTIFIER,
@@ -82,7 +121,9 @@ export_vapoursynth_plugin! {
         read_only: false,
     },
     [
-        AdaptiveGrainFunction::new()
+        AdaptiveGrainFunction::new(),
+        GrainFunction::new(),
+        MaskFunction::new()
     ]
 }
 
