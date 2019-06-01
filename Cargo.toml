@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 failure = "0.1"
+faster = "0.5"
 lazy_static = "1.3.0"
 num = "0.2"
 rand = "0.6"
@@ -15,3 +16,7 @@ vapoursynth-sys = "0.2"
 
 [lib]
 crate-type = ["cdylib"]
+
+[profile.release]
+debug = true
+

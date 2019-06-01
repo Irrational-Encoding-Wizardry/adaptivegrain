@@ -1,4 +1,5 @@
 use failure::Error;
+use faster::*;
 use super::PLUGIN_NAME;
 use vapoursynth::api::API;
 use vapoursynth::core::CoreRef;
@@ -6,7 +7,7 @@ use vapoursynth::frame::{FrameRef, FrameRefMut};
 use vapoursynth::node::Node;
 use vapoursynth::plugins::{Filter, FrameContext};
 use vapoursynth::video_info::{VideoInfo, Property};
-use vapoursynth::format::{ColorFamily, SampleType};
+use vapoursynth::format::ColorFamily;
 use std::fmt::Debug;
 
 
@@ -18,22 +19,24 @@ pub struct Mask<'core> {
 lazy_static! {
     static ref FLOAT_RANGE: [f32; 1000] = {
         let mut floats = [0f32; 1000];
-        for i in 0..1000 {
-            floats[i] = (i as f32) * 0.001;
-        }
+        floats.iter_mut()
+            .enumerate()
+            .map(|(i, _f)| (i as f32) * 0.001)
+            .for_each(drop);
         floats
     };
 }
 
 #[inline]
-fn get_mask_value(x: &f32, y: &f32, luma_scaling: &f32) -> f32 {
+fn get_mask_value(x: f32, y: f32, luma_scaling: f32) -> f32 {
     f32::powf(1.0 - (x * (1.124 + x * (-9.466 + x * (36.624 + x * (-45.47 + x * 18.188))))), (y * y) * luma_scaling)
 }
 
+#[inline]
 fn from_property<T: Debug + Clone + Copy + Eq + PartialEq>(prop: Property<T>) -> T {
     match prop {
-        Property::Variable => panic!(),
-        Property::Constant(p) => p
+        Property::Constant(p) => p,
+        Property::Variable => panic!()
     }
 }
 
@@ -90,13 +93,16 @@ impl<'core> Filter<'core> for Mask<'core> {
             Err(_) => panic!(format!("{}: you need to run std.PlaneStats on the clip before calling this function.", PLUGIN_NAME))
         };
 
-        let lut: Vec<f32> = FLOAT_RANGE.iter().map(|x| get_mask_value(x, &average, &self.luma_scaling)).collect();
+        let lut: Vec<f32> = FLOAT_RANGE.iter().map(|x| get_mask_value(*x, average, self.luma_scaling)).collect();
 
         for row in 0..frame.height(0) {
             //panic!(format!("{:?}", frame.plane_row::<f32>(0, 1000)));
-            for (pixel, src_pixel) in frame.plane_row_mut::<f32>(0, row).iter_mut()
-                .zip(src_frame.plane_row::<f32>(0, row).iter()) {
-                *pixel = lut[(src_pixel * 1000f32) as usize];
+            //for (pixel, src_pixel) in frame.plane_row_mut::<f32>(0, row).iter_mut()
+            //    .zip(src_frame.plane_row::<f32>(0, row).iter()) {
+            //*pixel = lut[(src_pixel * 1000f32) as usize];
+            for (pixel, src_pixel) in frame.plane_row_mut::<f32>(0, row).simd_iter_mut()
+                .simd_zip(src_frame.plane_row(0, row).simd_iter()) {
+                *pixel = lut[(src_pixel * f32s(1000.0)) as usize];
             }
         }
         Ok(frame.into())
