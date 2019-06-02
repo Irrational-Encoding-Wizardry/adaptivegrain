@@ -111,14 +111,16 @@ make_filter_function! {
             None => 10.0
         };
         if let Property::Constant(format) = clip.info().format {
-            if format.bits_per_sample() == 32 && format.sample_type() == SampleType::Float {
+            if !(format.sample_type() == SampleType::Float && format.bits_per_sample() != 32) {
                 return Ok(Some(Box::new(Mask {
                     source: clip,
                     luma_scaling
                 })));
+            } else {
+                bail!("Half precision float input is not supported");
             }
         }
-        bail!("Currently, only constant 32bit float input is supported" )
+        bail!("Variable format input is not supported")
     }
 }
 

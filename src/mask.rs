@@ -1,14 +1,13 @@
 use super::PLUGIN_NAME;
 use failure::Error;
+use num::{NumCast, ToPrimitive};
 use std::fmt::Debug;
-use vapoursynth::api::API;
+use std::ops::Shl;
 use vapoursynth::core::CoreRef;
 use vapoursynth::format::ColorFamily;
-use vapoursynth::frame::{FrameRef, FrameRefMut};
-use vapoursynth::node::Node;
 use vapoursynth::plugins::{Filter, FrameContext};
+use vapoursynth::prelude::*;
 use vapoursynth::video_info::{Property, VideoInfo};
-use std::hint::unreachable_unchecked;
 
 pub struct Mask<'core> {
     pub source: Node<'core>,
@@ -17,10 +16,10 @@ pub struct Mask<'core> {
 
 lazy_static! {
     static ref FLOAT_RANGE: Vec<f32> = {
-        [0f32; 1000]
+        [0f32; 256]
             .iter()
             .enumerate()
-            .map(|(i, _f)| (i as f32) * 0.001)
+            .map(|(i, _f)| (i as f32) * (1.0 / 256.0))
             .collect::<Vec<_>>()
     };
 }
@@ -38,6 +37,51 @@ fn from_property<T: Debug + Clone + Copy + Eq + PartialEq>(prop: Property<T>) ->
     match prop {
         Property::Constant(p) => p,
         Property::Variable => unreachable!(),
+    }
+}
+
+fn filter_for_int<T>(
+    frame: &mut FrameRefMut,
+    src_frame: FrameRef,
+    depth: u8,
+    average: f32,
+    luma_scaling: f32,
+) where
+    T: Component + NumCast + Clone + Shl<u8> + Debug,
+    <T as Shl<u8>>::Output: ToPrimitive,
+{
+    let max = ((1 << depth) - 1) as f32;
+    let lut: Vec<T> = FLOAT_RANGE
+        .iter()
+        .map(|x| {
+            T::from(get_mask_value(*x, average, luma_scaling) * max).unwrap()
+        })
+        .collect();
+    for row in 0..frame.height(0) {
+        for (pixel, src_pixel) in frame
+            .plane_row_mut::<T>(0, row)
+            .iter_mut()
+            .zip(src_frame.plane_row::<T>(0, row).iter())
+        {
+            let i = <usize as NumCast>::from(src_pixel.clone()).unwrap() >> (depth - 8);
+            *pixel = lut[i].clone();
+        }
+    }
+}
+
+fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, average: f32, luma_scaling: f32) {
+    let lut: Vec<f32> = FLOAT_RANGE
+        .iter()
+        .map(|x| get_mask_value(*x, average, luma_scaling))
+        .collect();
+    for row in 0..frame.height(0) {
+        for (pixel, src_pixel) in frame
+            .plane_row_mut::<f32>(0, row)
+            .iter_mut()
+            .zip(src_frame.plane_row::<f32>(0, row).iter())
+        {
+            *pixel = lut[(src_pixel * 255f32) as usize];
+        }
     }
 }
 
@@ -99,24 +143,45 @@ impl<'core> Filter<'core> for Mask<'core> {
         })?;
         let average = match src_frame.props().get::<f64>("PlaneStatsAverage") {
             Ok(average) => average as f32,
-            Err(_) => panic!(format!(
+            Err(_) => bail!(format!(
                 "{}: you need to run std.PlaneStats on the clip before calling this function.",
                 PLUGIN_NAME
             )),
         };
 
-        let lut: Vec<f32> = FLOAT_RANGE
-            .iter()
-            .map(|x| get_mask_value(*x, average, self.luma_scaling))
-            .collect();
-
-        for row in 0..frame.height(0) {
-            for (pixel, src_pixel) in frame
-                .plane_row_mut::<f32>(0, row)
-                .iter_mut()
-                .zip(src_frame.plane_row::<f32>(0, row).iter())
-            {
-                *pixel = lut[(src_pixel * 1000f32) as usize];
+        match from_property(self.source.info().format).sample_type() {
+            SampleType::Integer => {
+                let depth = from_property(self.source.info().format).bits_per_sample();
+                match depth {
+                    _ if depth <= 8 => filter_for_int::<u8>(
+                        &mut frame,
+                        src_frame,
+                        depth,
+                        average,
+                        self.luma_scaling,
+                    ),
+                    _ if 8 < depth && depth <= 16 => filter_for_int::<u16>(
+                        &mut frame,
+                        src_frame,
+                        depth,
+                        average,
+                        self.luma_scaling,
+                    ),
+                    _ if 16 < depth && depth <= 32 => filter_for_int::<u32>(
+                        &mut frame,
+                        src_frame,
+                        depth,
+                        average,
+                        self.luma_scaling,
+                    ),
+                    _ => bail!(format!(
+                        "{}: input depth {} not supported",
+                        PLUGIN_NAME, depth
+                    )),
+                }
+            }
+            SampleType::Float => {
+                filter_for_float(&mut frame, src_frame, average, self.luma_scaling);
             }
         }
         Ok(frame.into())
