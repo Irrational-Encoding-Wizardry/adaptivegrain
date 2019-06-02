@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 failure = "0.1"
-faster = "0.5"
+faster = { git = "https://github.com/AdamNiederer/faster.git" }
 lazy_static = "1.3.0"
 num = "0.2"
 rand = "0.6"

@@ -1,5 +1,6 @@
 use failure::Error;
-use faster::*;
+use faster::into_iters::*;
+use faster::iters::*;
 use super::PLUGIN_NAME;
 use vapoursynth::api::API;
 use vapoursynth::core::CoreRef;
@@ -17,13 +18,11 @@ pub struct Mask<'core> {
 }
 
 lazy_static! {
-    static ref FLOAT_RANGE: [f32; 1000] = {
-        let mut floats = [0f32; 1000];
-        floats.iter_mut()
+    static ref FLOAT_RANGE: Vec<f32> = {
+        [0f32; 1000].iter()
             .enumerate()
             .map(|(i, _f)| (i as f32) * 0.001)
-            .for_each(drop);
-        floats
+            .collect::<Vec<_>>()
     };
 }
 
@@ -96,13 +95,9 @@ impl<'core> Filter<'core> for Mask<'core> {
         let lut: Vec<f32> = FLOAT_RANGE.iter().map(|x| get_mask_value(*x, average, self.luma_scaling)).collect();
 
         for row in 0..frame.height(0) {
-            //panic!(format!("{:?}", frame.plane_row::<f32>(0, 1000)));
-            //for (pixel, src_pixel) in frame.plane_row_mut::<f32>(0, row).iter_mut()
-            //    .zip(src_frame.plane_row::<f32>(0, row).iter()) {
-            //*pixel = lut[(src_pixel * 1000f32) as usize];
-            for (pixel, src_pixel) in frame.plane_row_mut::<f32>(0, row).simd_iter_mut()
-                .simd_zip(src_frame.plane_row(0, row).simd_iter()) {
-                *pixel = lut[(src_pixel * f32s(1000.0)) as usize];
+            for (pixel, src_pixel) in frame.plane_row_mut::<f32>(0, row).iter_mut()
+                .zip(src_frame.plane_row::<f32>(0, row).iter()) {
+                *pixel = lut[(src_pixel * 1000f32) as usize];
             }
         }
         Ok(frame.into())
