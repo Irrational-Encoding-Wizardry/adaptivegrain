@@ -8,23 +8,23 @@ extern crate vapoursynth;
 mod grain;
 mod mask;
 
-use self::mask::Mask;
 use self::grain::Grain;
+use self::mask::Mask;
 use failure::Error;
 use vapoursynth::api::API;
 use vapoursynth::core::CoreRef;
+use vapoursynth::format::SampleType;
 use vapoursynth::frame::{FrameRef, FrameRefMut};
 use vapoursynth::map::Map;
 use vapoursynth::node::Node;
 use vapoursynth::plugins::{Filter, FilterArgument, FrameContext, Metadata};
-use vapoursynth::video_info::{VideoInfo, Property};
-use vapoursynth::format::SampleType;
+use vapoursynth::video_info::{Property, VideoInfo};
 
 pub const PLUGIN_NAME: &str = "adaptivegrain";
 pub const PLUGIN_IDENTIFIER: &str = "moe.kageru.adaptivegrain";
 
 struct AdaptiveGrain<'core> {
-    source: Node<'core>
+    source: Node<'core>,
 }
 
 impl<'core> Filter<'core> for AdaptiveGrain<'core> {
@@ -50,12 +50,15 @@ impl<'core> Filter<'core> for AdaptiveGrain<'core> {
         context: FrameContext,
         n: usize,
     ) -> Result<FrameRef<'core>, Error> {
-        let frame = self.source
-            .get_frame_filter(context, n)
-            .ok_or_else(|| format_err!("Could not retrieve source frame. This shouldn’t happen."))?;
+        let frame = self.source.get_frame_filter(context, n).ok_or_else(|| {
+            format_err!("Could not retrieve source frame. This shouldn’t happen.")
+        })?;
         let average = match frame.props().get::<f64>("PlaneStatsAverage") {
             Ok(average) => (average * 256.0) as u8,
-            Err(_) => panic!(PLUGIN_NAME.to_owned() + ": You need to run std.PlaneStats on the clip before calling this function.")
+            Err(_) => panic!(
+                PLUGIN_NAME.to_owned()
+                    + ": You need to run std.PlaneStats on the clip before calling this function."
+            ),
         };
 
         let mut frame = FrameRefMut::copy_of(core, &frame);

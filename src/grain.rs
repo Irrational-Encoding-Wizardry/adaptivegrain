@@ -1,17 +1,17 @@
 use failure::Error;
 use num::Integer;
+use rand::distributions::Uniform;
 use rand::Rng;
+use rand_xorshift::XorShiftRng;
 use vapoursynth::api::API;
 use vapoursynth::core::CoreRef;
 use vapoursynth::frame::{FrameRef, FrameRefMut};
 use vapoursynth::node::Node;
 use vapoursynth::plugins::{Filter, FrameContext};
 use vapoursynth::video_info::VideoInfo;
-use rand::distributions::Uniform;
-use rand_xorshift::XorShiftRng;
 
 pub struct Grain<'core> {
-    pub source: Node<'core>
+    pub source: Node<'core>,
 }
 
 #[inline]
@@ -42,9 +42,9 @@ impl<'core> Filter<'core> for Grain<'core> {
         context: FrameContext,
         n: usize,
     ) -> Result<FrameRef<'core>, Error> {
-        let frame = self.source
-            .get_frame_filter(context, n)
-            .ok_or_else(|| format_err!("Could not retrieve source frame. This shouldn’t happen."))?;
+        let frame = self.source.get_frame_filter(context, n).ok_or_else(|| {
+            format_err!("Could not retrieve source frame. This shouldn’t happen.")
+        })?;
         let var = 20i16;
         // these have to be defined explicitly for lifetime reasons
         //let mut rng = thread_rng();
