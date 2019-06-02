@@ -1,6 +1,4 @@
 use failure::Error;
-use faster::into_iters::*;
-use faster::iters::*;
 use super::PLUGIN_NAME;
 use vapoursynth::api::API;
 use vapoursynth::core::CoreRef;

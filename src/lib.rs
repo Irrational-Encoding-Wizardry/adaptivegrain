@@ -17,7 +17,8 @@ use vapoursynth::frame::{FrameRef, FrameRefMut};
 use vapoursynth::map::Map;
 use vapoursynth::node::Node;
 use vapoursynth::plugins::{Filter, FilterArgument, FrameContext, Metadata};
-use vapoursynth::video_info::VideoInfo;
+use vapoursynth::video_info::{VideoInfo, Property};
+use vapoursynth::format::SampleType;
 
 pub const PLUGIN_NAME: &str = "adaptivegrain";
 pub const PLUGIN_IDENTIFIER: &str = "moe.kageru.adaptivegrain";
@@ -76,7 +77,7 @@ make_filter_function! {
         _api: API,
         _core: CoreRef<'core>,
         clip: Node<'core>,
-    ) -> Result<Option<Box<Filter<'core> + 'core>>, Error> {
+    ) -> Result<Option<Box<dyn Filter<'core> + 'core>>, Error> {
         Ok(Some(Box::new(AdaptiveGrain { source: clip })))
     }
 }
@@ -88,7 +89,7 @@ make_filter_function! {
         _api: API,
         _core: CoreRef<'core>,
         clip: Node<'core>,
-    ) -> Result<Option<Box<Filter<'core> + 'core>>, Error> {
+    ) -> Result<Option<Box<dyn Filter<'core> + 'core>>, Error> {
         Ok(Some(Box::new(Grain { source: clip })))
     }
 }
@@ -101,15 +102,20 @@ make_filter_function! {
         _core: CoreRef<'core>,
         clip: Node<'core>,
         luma_scaling: Option<f64>
-    ) -> Result<Option<Box<Filter<'core> + 'core>>, Error> {
+    ) -> Result<Option<Box<dyn Filter<'core> + 'core>>, Error> {
         let luma_scaling = match luma_scaling {
             Some(i) => i as f32,
             None => 10.0
         };
-        Ok(Some(Box::new(Mask {
-            source: clip,
-            luma_scaling
-        })))
+        if let Property::Constant(format) = clip.info().format {
+            if format.bits_per_sample() == 32 && format.sample_type() == SampleType::Float {
+                return Ok(Some(Box::new(Mask {
+                    source: clip,
+                    luma_scaling
+                })));
+            }
+        }
+        bail!("Currently, only constant 32bit float input is supported" )
     }
 }
 
@@ -121,8 +127,8 @@ export_vapoursynth_plugin! {
         read_only: false,
     },
     [
-        AdaptiveGrainFunction::new(),
-        GrainFunction::new(),
+        //AdaptiveGrainFunction::new(),
+        //GrainFunction::new(),
         MaskFunction::new()
     ]
 }
