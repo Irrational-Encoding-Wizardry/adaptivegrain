@@ -153,21 +153,21 @@ impl<'core> Filter<'core> for Mask<'core> {
             SampleType::Integer => {
                 let depth = from_property(self.source.info().format).bits_per_sample();
                 match depth {
-                    _ if depth <= 8 => filter_for_int::<u8>(
+                    0..=8 => filter_for_int::<u8>(
                         &mut frame,
                         src_frame,
                         depth,
                         average,
                         self.luma_scaling,
                     ),
-                    _ if 8 < depth && depth <= 16 => filter_for_int::<u16>(
+                    9..=16 => filter_for_int::<u16>(
                         &mut frame,
                         src_frame,
                         depth,
                         average,
                         self.luma_scaling,
                     ),
-                    _ if 16 < depth && depth <= 32 => filter_for_int::<u32>(
+                    17..=32 => filter_for_int::<u32>(
                         &mut frame,
                         src_frame,
                         depth,
