@@ -3,6 +3,7 @@ use failure::Error;
 use num::{NumCast, ToPrimitive};
 use std::fmt::Debug;
 use std::ops::Shl;
+use std::ptr;
 use vapoursynth::core::CoreRef;
 use vapoursynth::format::ColorFamily;
 use vapoursynth::plugins::{Filter, FrameContext};
@@ -53,9 +54,7 @@ fn filter_for_int<T>(
     let max = ((1 << depth) - 1) as f32;
     let lut: Vec<T> = FLOAT_RANGE
         .iter()
-        .map(|x| {
-            T::from(get_mask_value(*x, average, luma_scaling) * max).unwrap()
-        })
+        .map(|x| T::from(get_mask_value(*x, average, luma_scaling) * max).unwrap())
         .collect();
     for row in 0..frame.height(0) {
         for (pixel, src_pixel) in frame
@@ -64,7 +63,9 @@ fn filter_for_int<T>(
             .zip(src_frame.plane_row::<T>(0, row).iter())
         {
             let i = <usize as NumCast>::from(src_pixel.clone()).unwrap() >> (depth - 8);
-            *pixel = lut[i].clone();
+            unsafe {
+                ptr::write(pixel, lut[i].clone());
+            }
         }
     }
 }
@@ -80,7 +81,9 @@ fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, average: f32, 
             .iter_mut()
             .zip(src_frame.plane_row::<f32>(0, row).iter())
         {
-            *pixel = lut[(src_pixel * 255f32) as usize];
+            unsafe {
+                ptr::write(pixel, lut[(src_pixel * 255f32) as usize]);
+            }
         }
     }
 }
