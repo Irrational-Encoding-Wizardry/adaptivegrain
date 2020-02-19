@@ -31,12 +31,12 @@ fn get_mask_value(x: f32, y: f32, luma_scaling: f32) -> f32 {
 }
 
 macro_rules! from_property {
-    ($prop: expr) => (
+    ($prop: expr) => {
         match $prop {
             Property::Constant(p) => p,
             Property::Variable => unreachable!(),
         }
-    )
+    };
 }
 
 macro_rules! int_filter {
@@ -81,7 +81,7 @@ fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, average: f32, 
             .zip(src_frame.plane_row::<f32>(0, row).iter())
         {
             unsafe {
-                ptr::write(pixel, lut[(src_pixel * 255f32) as usize]);
+                ptr::write(pixel, lut[(src_pixel * 255.99f32) as usize]);
             }
         }
     }
