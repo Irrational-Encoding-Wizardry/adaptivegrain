@@ -1,6 +1,5 @@
 use super::PLUGIN_NAME;
 use failure::Error;
-use std::fmt::Debug;
 use std::ptr;
 use vapoursynth::core::CoreRef;
 use vapoursynth::format::ColorFamily;
@@ -31,12 +30,13 @@ fn get_mask_value(x: f32, y: f32, luma_scaling: f32) -> f32 {
     )
 }
 
-#[inline]
-fn from_property<T: Debug + Clone + Copy + Eq + PartialEq>(prop: Property<T>) -> T {
-    match prop {
-        Property::Constant(p) => p,
-        Property::Variable => unreachable!(),
-    }
+macro_rules! from_property {
+    ($prop: expr) => (
+        match $prop {
+            Property::Constant(p) => p,
+            Property::Variable => unreachable!(),
+        }
+    )
 }
 
 macro_rules! int_filter {
@@ -131,13 +131,13 @@ impl<'core> Filter<'core> for Mask<'core> {
         context: FrameContext,
         n: usize,
     ) -> Result<FrameRef<'core>, Error> {
-        let new_format = from_property(self.video_info(_api, core)[0].format);
+        let new_format = from_property!(self.video_info(_api, core)[0].format);
         let mut frame = unsafe {
             FrameRefMut::new_uninitialized(
                 core,
                 None,
                 new_format,
-                from_property(self.source.info().resolution),
+                from_property!(self.source.info().resolution),
             )
         };
         let src_frame = self.source.get_frame_filter(context, n).ok_or_else(|| {
@@ -151,9 +151,9 @@ impl<'core> Filter<'core> for Mask<'core> {
             )),
         };
 
-        match from_property(self.source.info().format).sample_type() {
+        match from_property!(self.source.info().format).sample_type() {
             SampleType::Integer => {
-                let depth = from_property(self.source.info().format).bits_per_sample();
+                let depth = from_property!(self.source.info().format).bits_per_sample();
                 match depth {
                     0..=8 => {
                         int_filter!(u8, filter_8bit);
