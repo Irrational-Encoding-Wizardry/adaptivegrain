@@ -29,7 +29,7 @@ the input clip to generate a mask for.
 luma_scaling: float = 10.0
 ```
 the luma\_scaling factor as described in the blog post.
-Higher values will make the mask brighter overall.
+Lower values will make the mask brighter overall.
 
 ## Build instructions
 ```sh
