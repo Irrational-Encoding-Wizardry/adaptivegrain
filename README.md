@@ -32,6 +32,9 @@ the luma\_scaling factor as described in the blog post.
 Lower values will make the mask brighter overall.
 
 ## Build instructions
+If you’re on Arch Linux,
+  there’s an [AUR package](https://aur.archlinux.org/packages/vapoursynth-plugin-adaptivegrain-git/) for this plugin.
+Otherwise you’ll have to build and install the package manually.
 ```sh
 cargo build --release
 ```
