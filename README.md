@@ -4,14 +4,14 @@ For a description of the math and the general idea,
 see [the article](https://kageru.moe/blog/article/adaptivegrain/).
 
 ## Usage
-`core.adg.Mask(clip, luma_scaling: float)`
+```py
+core.adg.Mask(clip, luma_scaling: float)
+```
 
 You must call `std.PlaneStats()` before this plugin
   (or fill the PlaneStatsAverage frame property using some other method).
-
 Supported formats are YUV with 8-32 bit precision integer or single precision float.
 Half precision float input is not supported since no one seems to be using that anyway.
-
 Since the output is grey and only luma is processed,
   the subsampling of the input does not matter.
 
@@ -20,10 +20,14 @@ It behaves exactly like the original implementation
   (except for the performance, which is about 3x faster on my machine).
 
 ### Parameters
-`clip: vapoursynth.VideoNode` 
+```
+clip: vapoursynth.VideoNode
+```
 the input clip to generate a mask for.
 
-`luma_scaling: float = 10.0`
+```py
+luma_scaling: float = 10.0
+```
 the luma\_scaling factor as described in the blog post.
 Higher values will make the mask brighter overall.
 
