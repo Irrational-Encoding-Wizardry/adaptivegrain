@@ -43,11 +43,13 @@ Binaries for Windows and Linux are in the release tab.
 
 ## FAQ
 **Why do I have to call std.PlaneStats() manually?**
+
 Because I didn’t want to reimplement it.
 `kagefunc.adaptive_grain(clip, show_mask=True)`
   does that for you and then just returns the mask.
 
 **Why doesn’t this also add grain?**
+
 I was going to do that originally,
   but it just goes back to the same point
   about not wanting to reimplement
