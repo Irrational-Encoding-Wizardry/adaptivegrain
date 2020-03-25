@@ -174,9 +174,25 @@ impl<'core> Filter<'core> for Mask<'core> {
                 }
             }
             SampleType::Float => {
+                if let Err(e) = verify_input_range(&src_frame.props()) {
+                    bail!(e);
+                }
                 filter_for_float(&mut frame, src_frame, average, self.luma_scaling);
             }
         }
         Ok(frame.into())
     }
+}
+
+fn verify_input_range<'a>(props: &vapoursynth::map::MapRef<'a, 'a>) -> Result<(), String> {
+    let max = props.get::<f64>("PlaneStatsMax").unwrap_or(1.0);
+    let min = props.get::<f64>("PlaneStatsMin").unwrap_or(0.0);
+    if min < 0.0 || max > 1.0 {
+        return Err(format!(
+                "{}: found invalid input. Some pixels are outside of the valid range.
+                You probably used a filter that operates on limited range without clipping properly, e.g. edgefixer, before converting to float.
+                This can be fixed by clipping all pixels to (0, 1) with Expr or converting to an integer format.", PLUGIN_NAME
+        ));
+    }
+    Ok(())
 }
