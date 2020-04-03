@@ -5,10 +5,10 @@ authors = ["kageru"]
 edition = "2018"
 
 [dependencies]
-failure = "0.1"
-lazy_static = "1.3.0"
-vapoursynth = "0.2"
-vapoursynth-sys = "0.2"
+failure = "0.1.7"
+lazy_static = "1.4.0"
+vapoursynth = "0.3.0"
+vapoursynth-sys = "0.3.0"
 
 [lib]
 crate-type = ["cdylib"]
