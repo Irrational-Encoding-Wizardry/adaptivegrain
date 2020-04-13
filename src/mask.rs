@@ -59,7 +59,7 @@ macro_rules! int_filter {
                     .iter_mut()
                     .zip(src_frame.plane_row::<$type>(0, row))
                 {
-                    let i = (src_pixel.clone() >> (depth - 8)) as usize;
+                    let i = (src_pixel >> (depth - 8)) as usize;
                     unsafe {
                         ptr::write(pixel, lut[i].clone());
                     }
@@ -75,15 +75,16 @@ fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, average: f32, 
         .map(|x| get_mask_value(*x, average, luma_scaling))
         .collect();
     for row in 0..frame.height(0) {
-        for (pixel, src_pixel) in frame
+        frame
             .plane_row_mut::<f32>(0, row)
             .iter_mut()
-            .zip(src_frame.plane_row::<f32>(0, row).iter())
-        {
-            unsafe {
-                ptr::write(pixel, lut[(src_pixel * 255.99f32) as usize]);
-            }
-        }
+            .zip(src_frame.plane_row::<f32>(0, row))
+            .for_each(|(pixel, src_pixel)| unsafe {
+                ptr::write(
+                    pixel,
+                    lut[(src_pixel.min(1.0).max(0.0) * 255.99) as usize],
+                );
+            });
     }
 }
 
@@ -174,25 +175,9 @@ impl<'core> Filter<'core> for Mask<'core> {
                 }
             }
             SampleType::Float => {
-                if let Err(e) = verify_input_range(&src_frame.props()) {
-                    bail!(e);
-                }
                 filter_for_float(&mut frame, src_frame, average, self.luma_scaling);
             }
         }
         Ok(frame.into())
     }
-}
-
-fn verify_input_range<'a>(props: &vapoursynth::map::MapRef<'a, 'a>) -> Result<(), String> {
-    let max = props.get::<f64>("PlaneStatsMax").unwrap_or(1.0);
-    let min = props.get::<f64>("PlaneStatsMin").unwrap_or(0.0);
-    if min < 0.0 || max > 1.0 {
-        return Err(format!(
-                "{}: found invalid input. Some pixels are outside of the valid range.
-                You probably used a filter that operates on limited range without clipping properly, e.g. edgefixer, before converting to float.
-                This can be fixed by clipping all pixels to (0, 1) with Expr or converting to an integer format.", PLUGIN_NAME
-        ));
-    }
-    Ok(())
 }
