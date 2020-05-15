@@ -193,13 +193,13 @@ mod tests {
             .iter()
             .zip(EXPECTED_MASK_02.iter())
             .for_each(|(&x, &exp)| {
-                assert!(get_mask_value(x, 0.2, 10.0) - exp < 0.0001);
+                assert!((get_mask_value(x, 0.2, 10.0) - exp).abs() < 0.0001);
             });
         FLOAT_RANGE
             .iter()
             .zip(EXPECTED_MASK_08.iter())
             .for_each(|(&x, &exp)| {
-                assert!(get_mask_value(x, 0.8, 10.0) - exp < 0.0001);
+                assert!((get_mask_value(x, 0.8, 10.0) - exp).abs() < 0.0001);
             });
     }
 }
