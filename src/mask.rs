@@ -17,14 +17,14 @@ lazy_static! {
 }
 
 #[inline]
-pub fn get_mask_value(x: f32, y: f32, luma_scaling: f32) -> f32 {
+pub fn get_mask_value(x: f32, luma_scaling: f32) -> f32 {
     f32::powf(
         1.0 - (x
             * (x.mul_add(
                 x.mul_add(x.mul_add(x.mul_add(18.188, -45.47), 36.624), -9.466),
                 1.124,
             ))),
-        y * y * luma_scaling,
+        luma_scaling,
     )
 }
 
@@ -39,17 +39,11 @@ macro_rules! from_property {
 
 macro_rules! int_filter {
     ($type:ty, $fname:ident) => {
-        fn $fname(
-            frame: &mut FrameRefMut,
-            src_frame: FrameRef,
-            depth: u8,
-            average: f32,
-            luma_scaling: f32,
-        ) {
+        fn $fname(frame: &mut FrameRefMut, src_frame: FrameRef, depth: u8, luma_scaling: f32) {
             let max = ((1 << depth) - 1) as f32;
             let lut: Vec<$type> = FLOAT_RANGE
                 .iter()
-                .map(|x| (get_mask_value(*x, average, luma_scaling) * max) as $type)
+                .map(|x| (get_mask_value(*x, luma_scaling) * max) as $type)
                 .collect();
             for row in 0..frame.height(0) {
                 for (pixel, src_pixel) in frame
@@ -67,18 +61,14 @@ macro_rules! int_filter {
     };
 }
 
-fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, average: f32, luma_scaling: f32) {
-    let lut: Vec<f32> = FLOAT_RANGE
-        .iter()
-        .map(|x| get_mask_value(*x, average, luma_scaling))
-        .collect();
+fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, luma_scaling: f32) {
     for row in 0..frame.height(0) {
         frame
             .plane_row_mut::<f32>(0, row)
             .iter_mut()
             .zip(src_frame.plane_row::<f32>(0, row))
             .for_each(|(pixel, src_pixel)| unsafe {
-                ptr::write(pixel, lut[(src_pixel.min(1.0).max(0.0) * 255.99) as usize]);
+                ptr::write(pixel, get_mask_value(*src_pixel, luma_scaling));
             });
     }
 }
@@ -153,15 +143,30 @@ impl<'core> Filter<'core> for Mask<'core> {
                 match depth {
                     0..=8 => {
                         int_filter!(u8, filter_8bit);
-                        filter_8bit(&mut frame, src_frame, depth, average, self.luma_scaling)
+                        filter_8bit(
+                            &mut frame,
+                            src_frame,
+                            depth,
+                            calc_luma_scaling(average, self.luma_scaling),
+                        )
                     }
                     9..=16 => {
                         int_filter!(u16, filter_16bit);
-                        filter_16bit(&mut frame, src_frame, depth, average, self.luma_scaling)
+                        filter_16bit(
+                            &mut frame,
+                            src_frame,
+                            depth,
+                            calc_luma_scaling(average, self.luma_scaling),
+                        )
                     }
                     17..=32 => {
                         int_filter!(u32, filter_32bit);
-                        filter_32bit(&mut frame, src_frame, depth, average, self.luma_scaling)
+                        filter_32bit(
+                            &mut frame,
+                            src_frame,
+                            depth,
+                            calc_luma_scaling(average, self.luma_scaling),
+                        )
                     }
                     _ => bail!(format!(
                         "{}: input depth {} not supported",
@@ -170,11 +175,19 @@ impl<'core> Filter<'core> for Mask<'core> {
                 }
             }
             SampleType::Float => {
-                filter_for_float(&mut frame, src_frame, average, self.luma_scaling);
+                filter_for_float(
+                    &mut frame,
+                    src_frame,
+                    calc_luma_scaling(average, self.luma_scaling),
+                );
             }
         }
         Ok(frame.into())
     }
+}
+
+pub fn calc_luma_scaling(average: f32, luma_scaling: f32) -> f32 {
+    average * average * luma_scaling
 }
 
 #[cfg(test)]
@@ -193,13 +206,13 @@ mod tests {
             .iter()
             .zip(EXPECTED_MASK_02.iter())
             .for_each(|(&x, &exp)| {
-                assert!((get_mask_value(x, 0.2, 10.0) - exp).abs() < 0.0001);
+                assert!((get_mask_value(x, calc_luma_scaling(0.2, 10.0)) - exp).abs() < 0.0001);
             });
         FLOAT_RANGE
             .iter()
             .zip(EXPECTED_MASK_08.iter())
             .for_each(|(&x, &exp)| {
-                assert!((get_mask_value(x, 0.8, 10.0) - exp).abs() < 0.0001);
+                assert!((get_mask_value(x, calc_luma_scaling(0.8, 10.0)) - exp).abs() < 0.0001);
             });
     }
 }
