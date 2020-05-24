@@ -5,7 +5,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate vapoursynth;
 
-mod mask;
+pub mod mask;
 
 use self::mask::Mask;
 use failure::Error;

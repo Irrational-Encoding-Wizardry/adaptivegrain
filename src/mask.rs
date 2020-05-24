@@ -17,7 +17,7 @@ lazy_static! {
 }
 
 #[inline]
-fn get_mask_value(x: f32, y: f32, luma_scaling: f32) -> f32 {
+pub fn get_mask_value(x: f32, y: f32, luma_scaling: f32) -> f32 {
     f32::powf(
         1.0 - (x
             * (x.mul_add(
