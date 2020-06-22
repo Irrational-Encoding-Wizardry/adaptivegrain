@@ -28,6 +28,11 @@ pub fn get_mask_value(x: f32, luma_scaling: f32) -> f32 {
     )
 }
 
+#[inline]
+pub fn get_mask_value_clamping(x: f32, luma_scaling: f32) -> f32 {
+    get_mask_value(x.min(1.0).max(0.0), luma_scaling)
+}
+
 macro_rules! from_property {
     ($prop: expr) => {
         match $prop {
@@ -69,6 +74,18 @@ fn filter_for_float(frame: &mut FrameRefMut, src_frame: FrameRef, luma_scaling: 
             .zip(src_frame.plane_row::<f32>(0, row))
             .for_each(|(pixel, src_pixel)| unsafe {
                 ptr::write(pixel, get_mask_value(*src_pixel, luma_scaling));
+            });
+    }
+}
+
+fn filter_for_float_clamping(frame: &mut FrameRefMut, src_frame: FrameRef, luma_scaling: f32) {
+    for row in 0..frame.height(0) {
+        frame
+            .plane_row_mut::<f32>(0, row)
+            .iter_mut()
+            .zip(src_frame.plane_row::<f32>(0, row))
+            .for_each(|(pixel, src_pixel)| unsafe {
+                ptr::write(pixel, get_mask_value_clamping(*src_pixel, luma_scaling));
             });
     }
 }
@@ -129,7 +146,8 @@ impl<'core> Filter<'core> for Mask<'core> {
         let src_frame = self.source.get_frame_filter(context, n).ok_or_else(|| {
             format_err!("Could not retrieve source frame. This shouldn’t happen.")
         })?;
-        let average = match src_frame.props().get::<f64>("PlaneStatsAverage") {
+        let props = src_frame.props();
+        let average = match props.get::<f64>("PlaneStatsAverage") {
             Ok(average) => average as f32,
             Err(_) => bail!(format!(
                 "{}: you need to run std.PlaneStats on the clip before calling this function.",
@@ -175,11 +193,28 @@ impl<'core> Filter<'core> for Mask<'core> {
                 }
             }
             SampleType::Float => {
-                filter_for_float(
-                    &mut frame,
-                    src_frame,
-                    calc_luma_scaling(average, self.luma_scaling),
-                );
+                // If the input has pixel values outside of the valid range (0-1),
+                // those might also be out of range in the output.
+                // We use the min/max props to determine if output clamping is necessary.
+                let max = props
+                    .get::<f64>("PlaneStatsMax")
+                    .expect(&format!("{}: no PlaneStatsMax in frame props", PLUGIN_NAME));
+                let min = props
+                    .get::<f64>("PlaneStatsMin")
+                    .expect(&format!("{}: no PlaneStatsMin in frame props", PLUGIN_NAME));
+                if max > 1.0 || min < 0.0 {
+                    filter_for_float_clamping(
+                        &mut frame,
+                        src_frame,
+                        calc_luma_scaling(average, self.luma_scaling),
+                    );
+                } else {
+                    filter_for_float(
+                        &mut frame,
+                        src_frame,
+                        calc_luma_scaling(average, self.luma_scaling),
+                    );
+                }
             }
         }
         Ok(frame.into())
@@ -187,6 +222,7 @@ impl<'core> Filter<'core> for Mask<'core> {
 }
 
 pub fn calc_luma_scaling(average: f32, luma_scaling: f32) -> f32 {
+    let average = average.min(1.0).max(0.0);
     average * average * luma_scaling
 }
 
@@ -201,7 +237,7 @@ mod tests {
     static EXPECTED_MASK_08: [f32; 256] = [1.0, 0.97312033, 0.94854075, 0.92606485, 0.9055145, 0.88672876, 0.86956084, 0.8538767, 0.839554, 0.82648087, 0.8145538, 0.8036785, 0.793767, 0.7847378, 0.7765157, 0.7690307, 0.76221645, 0.7560116, 0.7503583, 0.7452015, 0.7404903, 0.73617536, 0.73221, 0.72855055, 0.7251544, 0.72198164, 0.7189933, 0.71615267, 0.7134242, 0.7107743, 0.70816976, 0.7055801, 0.7029752, 0.7003262, 0.69760597, 0.6947885, 0.69184875, 0.68876356, 0.6855104, 0.68206835, 0.6784181, 0.6745413, 0.6704213, 0.66604257, 0.6613911, 0.65645486, 0.65122217, 0.6456841, 0.6398328, 0.6336617, 0.6271661, 0.6203427, 0.6131898, 0.6057077, 0.5978976, 0.5897622, 0.5813064, 0.57253623, 0.56345886, 0.55408335, 0.54441965, 0.5344795, 0.52427536, 0.5138211, 0.5031317, 0.4922232, 0.48111236, 0.46981704, 0.45835546, 0.4467467, 0.4350106, 0.42316702, 0.4112368, 0.39924026, 0.38719845, 0.37513202, 0.36306223, 0.35100925, 0.33899403, 0.32703626, 0.31515577, 0.30337203, 0.29170325, 0.28016755, 0.268782, 0.25756323, 0.2465265, 0.23568656, 0.22505718, 0.21465099, 0.20447965, 0.19455387, 0.18488336, 0.17547633, 0.1663404, 0.15748179, 0.14890584, 0.14061676, 0.13261788, 0.1249111, 0.11749773, 0.11037807, 0.10355142, 0.09701606, 0.09076972, 0.08480923, 0.07913076, 0.07372954, 0.06860047, 0.06373775, 0.05913521, 0.05478584, 0.05068255, 0.046817873, 0.043183923, 0.039772622, 0.03657578, 0.03358472, 0.030791199, 0.0281864, 0.025761817, 0.02350881, 0.021418924, 0.019483581, 0.017694633, 0.01604377, 0.014523158, 0.013124882, 0.011841504, 0.010665701, 0.009590316, 0.008608681, 0.0077141733, 0.0069006504, 0.0061620683, 0.005492886, 0.0048876274, 0.004341311, 0.0038490645, 0.003406462, 0.0030092031, 0.002653386, 0.0023353002, 0.0020515076, 0.0017988166, 0.0015742666, 0.0013751301, 0.0011988885, 0.0010432207, 0.0009060293, 0.0007853431, 0.0006794224, 0.000586633, 0.0005055344, 0.00043479103, 0.00037322083, 0.00031973835, 0.000273389, 0.00023330118, 0.00019870678, 0.00016891248, 0.00014331177, 0.00012135691, 0.00010257295, 0.00008653258, 0.00007286733, 0.000061247025, 0.000051388823, 0.00004304101, 0.000035988374, 0.0000300405, 0.000025035166, 0.000020831892, 0.000017307977, 0.000014360154, 0.000011898005, 0.000009845784, 0.000008137849, 0.0000067192714, 0.0000055424794, 0.0000045681495, 0.0000037622924, 0.000003096917, 0.0000025480817, 0.000002096078, 0.0000017240154, 0.0000014181916, 0.0000011669001, 0.0000009606775, 0.0000007913941, 0.0000006526048, 0.00000053876414, 0.00000044541238, 0.0000003688414, 0.0000003060302, 0.0000002544758, 0.0000002121291, 0.00000017731381, 0.0000001486616, 0.00000012505093, 0.00000010556544, 0.00000008945813, 0.000000076118496, 0.00000006504881, 0.000000055840008, 0.000000048164882, 0.000000041750454, 0.000000036374765, 0.000000031857045, 0.00000002804884, 0.000000024828736, 0.0000000220954, 0.000000019769583, 0.000000017782428, 0.000000016077687, 0.000000014608518, 0.000000013338133, 0.000000012233408, 0.000000011266786, 0.00000001041748, 0.000000009665278, 0.000000008993553, 0.000000008389807, 0.000000007841596, 0.000000007338018, 0.0000000068717365, 0.0000000064341195, 0.000000006019636, 0.0000000056219833, 0.000000005237641, 0.0000000048619975, 0.0000000044932946, 0.000000004128811, 0.0000000037683177, 0.0000000034110592, 0.0000000030578147, 0.000000002710866, 0.0000000023724578, 0.0000000020451252, 0.0000000017326667, 0.0000000014390599, 0.0000000011677407, 0.00000000092250246, 0.00000000070643236, 0.00000000052136806, 0.00000000036839945, 0.00000000024704733, 0.00000000015548153, 0.0000000000904045, 0.000000000047542185, 0.000000000021915018, 0.000000000008435807, 0.0000000000025014576, 0.0000000000004905257, 0.00000000000004525513, 0.0000000000000006622447];
 
     #[test]
-    fn test_lut() {
+    fn test_mask_values() {
         FLOAT_RANGE
             .iter()
             .zip(EXPECTED_MASK_02.iter())
@@ -214,5 +250,25 @@ mod tests {
             .for_each(|(&x, &exp)| {
                 assert!((get_mask_value(x, calc_luma_scaling(0.8, 10.0)) - exp).abs() < 0.0001);
             });
+    }
+
+    #[test]
+    fn test_mask_values_clamping() {
+        FLOAT_RANGE
+            .iter()
+            .zip(EXPECTED_MASK_02.iter())
+            .for_each(|(&x, &exp)| {
+                assert!(
+                    (get_mask_value_clamping(x, calc_luma_scaling(0.2, 10.0)) - exp).abs() < 0.0001
+                );
+            });
+        assert_eq!(
+            get_mask_value_clamping(1.1, calc_luma_scaling(0.99, 10.0)),
+            0.0
+        );
+        assert_eq!(
+            get_mask_value_clamping(-0.1, calc_luma_scaling(-0.1, 10.0)),
+            1.0
+        );
     }
 }
