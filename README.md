@@ -45,15 +45,25 @@ No idea what the minimum version is,
 Binaries for Windows and Linux are in the release tab.
 
 ## FAQ
+**What’s the no-fma dll? Which one do I need?**
+
+There are two Windows builds of the plugin, one for CPUs that support
+   [FMA instructions](https://en.wikipedia.org/wiki/FMA_instruction_set) and one for those that don’t.  
+If your CPU is a Haswell (for Intel) or Piledriver (for AMD) or newer,
+   you can use the regular version (which is about 20% faster).
+Otherwise, grab no-fma.  
+The Linux build uses fma instructions.
+I trust that if you’re a Linux user on older hardware,
+  you know how to compile your own binaries.
+
 **Why do I have to call std.PlaneStats() manually?**
 
 ~~Because I didn’t want to reimplement it. `kagefunc.adaptive_grain(clip, show_mask=True)` does that for you and then just returns the mask.~~
 Because I was too dumb to realize [this](http://www.vapoursynth.com/doc/api/vapoursynth.h.html#invoke) exists.
-I’ll fix that at some point.
+I’ll fix that at some point.™
 
 **Why doesn’t this also add grain?**
 
 I was going to do that originally,
-  but it just goes back to the same point
-  about not wanting to reimplement
-  something that already exists.
+  but I didn’t want to reimplement grain
+  when we already have a working grain filter.
