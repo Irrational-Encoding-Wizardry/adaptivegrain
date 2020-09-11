@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 failure = "0.1.8"
-lazy_static = "1.4.0"
 vapoursynth = "0.3.0"
 vapoursynth-sys = "0.3.0"
 
